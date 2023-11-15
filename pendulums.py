@@ -1,23 +1,34 @@
+from dataclasses import dataclass
+
 import numpy as np
 from scipy.integrate import odeint
 
 sin = np.sin
 cos = np.cos
 pi = np.pi
-g = 9.8
-l1 = 1.
-l2 = 1.
-m1 = 1.
-m2 = 1.
+
+
+@dataclass
+class Constants:
+    g: float = 9.8
+    l1: float = 1.
+    l2: float = 1.
+    m1: float = 1.
+    m2: float = 1.
+    T_final: int = 10
+
+    def __iter__(self):
+        # yield self.g; yield self.l1; yield self.l2; yield self.m1; yield self.m2; yield self.T_final
+        yield from self.__dict__.values()
+
 
 def right_hand_side(
         y: np.ndarray,
         t: float,
-        g: float,
-        l1: float, l2: float,
-        m1: float, m2: float
+        cnst: Constants
     ) -> np.ndarray:
     th1, th2, om1, om2 = y
+    g, l1, l2, m1, m2, _ = cnst
     dydt = [
         om1,
         om2,
@@ -26,23 +37,26 @@ def right_hand_side(
     ]
     return np.array(dydt)
 
-def to_xy_coords(th1: np.ndarray, th2: np.ndarray, l1: float, l2: float) -> tuple[np.ndarray, np.ndarray]:
+
+def to_xy_coords(th1: np.ndarray, th2: np.ndarray, cnst: Constants) -> tuple[np.ndarray, np.ndarray]:
     ball1 = [
-        [l1*sin(theta1) for theta1 in th1],
-        [-l1*cos(theta1) for theta1 in th1]
+        [cnst.l1*sin(theta1) for theta1 in th1],
+        [-cnst.l1*cos(theta1) for theta1 in th1]
     ]
     ball2 = [
-        [ball1[0][ind]+l2*sin(theta2) for ind,theta2 in enumerate(th2)],
-        [ball1[1][ind]-l2*cos(theta2) for ind,theta2 in enumerate(th2)]
+        [ball1[0][ind]+cnst.l2*sin(theta2) for ind,theta2 in enumerate(th2)],
+        [ball1[1][ind]-cnst.l2*cos(theta2) for ind,theta2 in enumerate(th2)]
     ]
     return np.array(ball1), np.array(ball2)
 
-def get_solution(T_final: float, init_theta1: float, init_theta2: float) -> tuple[np.ndarray, np.ndarray]:
+
+def get_solution(init_theta1: float, init_theta2: float, cnst: Constants) -> tuple[np.ndarray, np.ndarray]:
     '''Get matrix with rows [theta1, theta2] for times [0, T]'''
-    t = np.linspace(0., T_final, 201)
+    t = np.linspace(0., cnst.T_final, 201)
     y0 = np.array([init_theta1, init_theta2, 0., 0.])
-    sol = odeint(right_hand_side, y0, t, args=(g,l1,l2,m1,m2))
+    sol = odeint(right_hand_side, y0, t, args=(cnst, ))
     return t, sol
+
 
 def get_flip_points(times: np.ndarray, theta2_angles: np.ndarray) -> np.ndarray:
     res = []
@@ -51,7 +65,24 @@ def get_flip_points(times: np.ndarray, theta2_angles: np.ndarray) -> np.ndarray:
             res.append(times[i])
     return res
 
-def count_flips(T_final: float, init_theta1: float, init_theta2: float) -> int:
-    t, sol = get_solution(T_final, init_theta1, init_theta2)
+
+def count_flips(init_theta1: float, init_theta2: float, cnst: Constants) -> int:
+    t, sol = get_solution(init_theta1, init_theta2, cnst)
     return len(get_flip_points(t, sol.T[1]))
+
+
+def get_resmap_sequential(N: int, cnst: Constants, verbose: bool = False) -> np.ndarray:
+    res_map = np.zeros((N, 2*N-1), dtype=int)
+    T_final = cnst.T_final
+    if verbose:
+        print(f'shape: {res_map.shape}; {np.prod(res_map.shape)} pixels; {T_final=}')
+
+    theta1s = np.linspace(0, np.pi, N)
+    theta2s = np.linspace(-np.pi, np.pi, 2*N-1)
+    
+    for i, t1 in enumerate(theta1s):
+        for j, t2 in enumerate(theta2s):
+            res_map[i, j] = count_flips(init_theta1=t1, init_theta2=t2, cnst=cnst)
+        if verbose: print(f'.{i+1}.', end='')
+    return res_map
 
