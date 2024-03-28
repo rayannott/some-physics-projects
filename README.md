@@ -1,7 +1,3 @@
-# Research and physics
+# Watch Accuracy
 
-Some code and research that is worth listing on my GitHub, but that does not deserve separate repos.
-
-## Contents
-In this repo you can find the following branches:
-...
+Recently I bought a Hamilton Khaki Field Automatic watch. I was curious about its accuracy, so I decided to measure it. I used an audio recorder on my phone to record the watch's ticking sound (for ~1 minute) and then I analyzed the recording to measure the actual time between ticks.
