@@ -64,10 +64,8 @@ def get_dev_xy(subreport: list[Report]) -> tuple[list[datetime], list[float]]:
     return times, devs
 
 
-def get_fig(subreports: list[list[Report]]) -> go.Figure:
+def get_fig(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    # split the reports on the resets and...
-    # ... show the errors plot per report group
     x = []
     y = []
     for subrep in subreports:
@@ -86,8 +84,12 @@ def get_fig(subreports: list[list[Report]]) -> go.Figure:
     )
 
     # ... show the best fit lines per group
-    x_best_lines = []
-    y_best_lines = []
+    x_best_lines: list[datetime | None] = []
+    y_best_lines: list[float | None] = []
+
+    x_daily_devs: list[datetime] = []
+    y_daily_devs: list[float] = []
+
     for subrep in subreports:
         if len(subrep) == 1:
             continue
@@ -104,6 +106,8 @@ def get_fig(subreports: list[list[Report]]) -> go.Figure:
             showarrow=True,
             xanchor="right",
         )
+        x_daily_devs.append(subrep[-1].time)
+        y_daily_devs.append(params[0] * 86400)
         x_best_lines.append(None)
         y_best_lines.append(None)
     fig.add_trace(
@@ -150,4 +154,37 @@ def get_fig(subreports: list[list[Report]]) -> go.Figure:
     fig.update_layout(legend=dict(y=1.1, orientation="h"))
     fig.update_yaxes(title_text="Accumulated error (s)", secondary_y=False)
     fig.update_yaxes(title_text="Deviation (s/day)", secondary_y=True, showgrid=False)
-    return fig
+
+    fig_dev = go.Figure()
+    fig_dev.add_trace(
+        go.Scatter(
+            x=x_daily_devs,
+            y=y_daily_devs,
+            mode="lines+markers",
+            marker=dict(size=10),
+            line=dict(width=1.5, dash="dash"),
+            line_shape="spline",
+            name="daily deviations",
+        )
+    )
+    fig_dev.update_layout(
+        template="plotly_dark",
+        title="Daily deviations",
+        xaxis_title="Time",
+        yaxis_title="Deviation (s/day)",
+    )
+
+    return fig, fig_dev
+
+
+def date_of_deviation(subreports: list[list[Report]], deviation_sec: float) -> datetime:
+    start_date = subreports[-1][0].time.timestamp()
+    if len(subreports[-1]) > 1:
+        subreport = subreports[-1]
+    else:
+        subreport = subreports[-2]
+        print("Warning: using the second last subreport to calculate the deviation.")
+    x_unix = [r.time.timestamp() for r in subreport]
+    y_errs = [r.err for r in subreport]
+    params = np.polyfit(x_unix, y_errs, 1)
+    return datetime.fromtimestamp(start_date + (deviation_sec / params[0]))
