@@ -177,13 +177,13 @@ def get_fig(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
     return fig, fig_dev
 
 
-def date_of_deviation(subreports: list[list[Report]], deviation_sec: float) -> datetime:
+def date_of_deviation(subreports: list[list[Report]], deviation_sec: float, force_choose_full_subreport: bool = False) -> datetime:
     start_date = subreports[-1][0].time.timestamp()
-    if len(subreports[-1]) > 1:
+    if not force_choose_full_subreport and len(subreports[-1]) > 1:
         subreport = subreports[-1]
     else:
         subreport = subreports[-2]
-        print("Warning: using the second last subreport to calculate the deviation.")
+        print("Using the second last subreport to calculate the deviation.")
     x_unix = [r.time.timestamp() for r in subreport]
     y_errs = [r.err for r in subreport]
     params = np.polyfit(x_unix, y_errs, 1)
