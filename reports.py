@@ -1,6 +1,6 @@
 from datetime import datetime
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -18,18 +18,25 @@ class Report:
     time: datetime
     shows: datetime
     is_reset: bool
-    err: float = field(init=False)
-
-    def __post_init__(self):
-        self.err = (self.shows - self.time).total_seconds()
+    
+    @property
+    def err(self) -> float:
+        return (self.shows - self.time).total_seconds()
 
     def __repr__(self):
         return f"{self.time} -> {self.shows:%H:%M:%S.%f} " + (
             f"(dev={self.err:+.2f})" if not self.is_reset else "[RESET]"
         )
 
-    @staticmethod
-    def from_line(line: str) -> "Report":
+    @classmethod
+    def from_line(cls, line: str) -> "Report":
+        """
+        Generate a Report object from a line of the report file.
+
+        Examples:
+        "on 01.01.21 at 12:30:00 shows 12:30:15" would result in a Report object
+        "on 01.01.21 reset to 12:30" would result in a Report object with is_reset=True
+        """
         if match := SHOWS_RE.match(line):
             time = datetime.strptime(
                 match["date"] + " " + match["time"], "%d.%m.%y %H:%M:%S"
@@ -42,17 +49,20 @@ class Report:
                 except ValueError:
                     pass
                 else:
-                    return Report(time, shows, False)
+                    return cls(time, shows, False)
         if match := RESET_RE.match(line):
             time = datetime.strptime(
                 match["date"] + " " + match["time"], "%d.%m.%y %H:%M"
             )
-            return Report(time, time, True)
+            return cls(time, time, True)
         raise ValueError(f"Invalid line: {line}")
 
     def __sub__(self, other: "Report") -> float:
+        """
+        Calculates the average deviation in seconds per day between two reports.
+        """
         return (
-            (self.shows - self.time).total_seconds()
+            self.err
             / (self.time - other.time).total_seconds()
             * 86400
         )
@@ -64,7 +74,7 @@ def get_dev_xy(subreport: list[Report]) -> tuple[list[datetime], list[float]]:
     return times, devs
 
 
-def get_fig(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
+def get_figs(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     x = []
     y = []
@@ -177,7 +187,11 @@ def get_fig(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
     return fig, fig_dev
 
 
-def date_of_deviation(subreports: list[list[Report]], deviation_sec: float, force_choose_full_subreport: bool = False) -> datetime:
+def date_of_deviation(
+    subreports: list[list[Report]],
+    deviation_sec: float,
+    force_choose_full_subreport: bool = False,
+) -> datetime:
     start_date = subreports[-1][0].time.timestamp()
     if not force_choose_full_subreport and len(subreports[-1]) > 1:
         subreport = subreports[-1]
