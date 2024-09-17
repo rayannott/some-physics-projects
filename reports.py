@@ -74,7 +74,7 @@ def get_dev_xy(subreport: list[Report]) -> tuple[list[datetime], list[float]]:
     return times, devs
 
 
-def get_figs(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
+def get_figs(subreports: list[list[Report]], with_immediate_deviation: bool = True) -> tuple[go.Figure, go.Figure]:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     x = []
     y = []
@@ -142,19 +142,20 @@ def get_figs(subreports: list[list[Report]]) -> tuple[go.Figure, go.Figure]:
         devs_all.extend(devs)
         times_all.append(None)
         devs_all.append(None)
-    fig.add_trace(
-        go.Scatter(
-            x=times_all,
-            y=devs_all,
-            name="deviation",
-            mode="lines+markers",
-            marker=dict(color="white"),
-            line=dict(width=1.5, dash="dash"),
-            line_shape="spline",
-            connectgaps=False,
-        ),
-        secondary_y=True,
-    )
+    if with_immediate_deviation:
+        fig.add_trace(
+            go.Scatter(
+                x=times_all,
+                y=devs_all,
+                name="deviation",
+                mode="lines+markers",
+                marker=dict(color="white"),
+                line=dict(width=1.5, dash="dash"),
+                line_shape="spline",
+                connectgaps=False,
+            ),
+            secondary_y=True,
+        )
 
     fig.update_layout(
         template="plotly_dark",
