@@ -1,5 +1,8 @@
-from datetime import datetime
 import re
+import json
+from datetime import datetime
+from itertools import dropwhile, pairwise
+import pathlib
 from dataclasses import dataclass
 
 import plotly.graph_objects as go
@@ -203,3 +206,36 @@ def date_of_deviation(
     y_errs = [r.err for r in subreport]
     params = np.polyfit(x_unix, y_errs, 1)
     return datetime.fromtimestamp(start_date + (deviation_sec / params[0]))
+
+
+
+class Reports:
+    def __init__(self, file_path: pathlib.Path):
+        _data = file_path.read_text()
+        _lines = [line.strip(' -') for line in _data.strip().split('\n')]
+        self.reports = [Report.from_line(line) for line in _lines]
+        print(
+            f"Loaded {len(self.reports)} reports with {sum(1 for r in self.reports if r.is_reset)} resets.",
+            f"Latest report from {self.reports[-1].time}.",
+            f"Latest reset from {next(dropwhile(lambda rep: not rep.is_reset, reversed(self.reports))).time}.",
+            sep='\n'
+        )
+
+        # show the error since the previous reset
+        reset_idx = [i for i, r in enumerate(self.reports) if r.is_reset]
+        slices = [slice(*el) for el in pairwise(reset_idx)] + [slice(reset_idx[-1], None)]
+        self.subreports = [self.reports[s] for s in slices]
+        for subrep in self.subreports:
+            if len(subrep) == 1:
+                continue
+            reset, *_, last_report = subrep
+            dev = last_report - reset
+            print(f"({reset.time}) -> ({last_report.time}): {dev:+.2f}sec/day")
+    
+    def dump_for_linear_regression(self):
+        sr = self.subreports[1]
+        x = [f'{r.time:%d.%m.%Y %H:%M:%S}' for r in sr]
+        y = [r.err for r in sr]
+
+        with open('watch-deviation.json', 'w') as fw:
+            json.dump(dict(zip(x, y)), fw, indent=2)
